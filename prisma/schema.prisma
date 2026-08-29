@@ -25,6 +25,8 @@ model User {
   Budget                Budget[]
   Reminder              Reminder[]
   RecurringTransaction  RecurringTransaction[]
+  TaxProfile            TaxProfile?
+  TaxDeduction          TaxDeduction[]
 }
 
 model Transaction {
@@ -75,6 +77,29 @@ model RecurringTransaction {
   frequency   String
   nextRun     DateTime
   enabled     Boolean   @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// สถานะสำหรับคำนวณค่าลดหย่อนส่วนตัว/คู่สมรส/บุตร ในการประมาณภาษีเงินได้บุคคลธรรมดา
+model TaxProfile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  maritalStatus String   @default("single") // "single" | "married"
+  children      Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ค่าลดหย่อนภาษีรายการอื่น ๆ ที่ผู้ใช้กรอกเอง (ประกันชีวิต, ประกันสังคม, บริจาค, ดอกเบี้ยบ้าน ฯลฯ)
+model TaxDeduction {
+  id        String   @id @default(cuid())
+  userId    String
+  label     String
+  amount    Decimal
+  year      Int
+  createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
