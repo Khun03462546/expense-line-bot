@@ -12,11 +12,6 @@ export async function POST(req: Request) {
   const rawBody = await req.text();
 
   if (!verifyLineSignature(rawBody, signature)) {
-    console.error('[webhook] signature mismatch', {
-      receivedSignature: signature,
-      bodyLength: rawBody.length,
-      body: rawBody,
-    });
     return Response.json({ ok: false, error: 'invalid signature' }, { status: 401 });
   }
 
