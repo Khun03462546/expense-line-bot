@@ -58,9 +58,13 @@ async function processEvent(event: webhook.Event) {
   const replyText = await handleUserMessage(user.id, event.message.text);
 
   if (event.replyToken) {
-    await lineClient.replyMessage({
-      replyToken: event.replyToken,
-      messages: [{ type: 'text', text: replyText }],
-    });
+    try {
+      await lineClient.replyMessage({
+        replyToken: event.replyToken,
+        messages: [{ type: 'text', text: replyText }],
+      });
+    } catch (error) {
+      console.error('Failed to reply via LINE', error);
+    }
   }
 }

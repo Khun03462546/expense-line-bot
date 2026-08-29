@@ -1,7 +1,7 @@
-import { addDays, addMonths, addWeeks } from 'date-fns';
 import { prisma } from './prisma';
 import { lineClient } from './line';
 import { getSummaryForRange } from './summary';
+import { advanceRecurringDate } from './recurring';
 
 // แอปนี้ตั้งเป้าผู้ใช้ในโซนเวลาเดียว (Asia/Bangkok, UTC+7 ไม่มี DST)
 // จึงคำนวณเวลาแบบ offset คงที่แทนการพึ่ง IANA timezone library
@@ -48,12 +48,6 @@ async function runDueReminders(now: Date, windowMinutes: number) {
   return { checked: reminders.length, sent };
 }
 
-const advanceByFrequency: Record<string, (date: Date) => Date> = {
-  daily: (date) => addDays(date, 1),
-  weekly: (date) => addWeeks(date, 1),
-  monthly: (date) => addMonths(date, 1),
-};
-
 async function runDueRecurringTransactions(now: Date) {
   const due = await prisma.recurringTransaction.findMany({
     where: { enabled: true, nextRun: { lte: now } },
@@ -61,8 +55,6 @@ async function runDueRecurringTransactions(now: Date) {
 
   let created = 0;
   for (const item of due) {
-    const advance = advanceByFrequency[item.frequency.toLowerCase()] ?? advanceByFrequency.monthly;
-
     await prisma.$transaction([
       prisma.transaction.create({
         data: {
@@ -76,7 +68,7 @@ async function runDueRecurringTransactions(now: Date) {
       }),
       prisma.recurringTransaction.update({
         where: { id: item.id },
-        data: { nextRun: advance(item.nextRun) },
+        data: { nextRun: advanceRecurringDate(item.nextRun, item.frequency.toLowerCase()) },
       }),
     ]);
 

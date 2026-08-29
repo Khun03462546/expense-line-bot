@@ -39,21 +39,27 @@ export function parseExpenseText(text: string): ParsedTransaction | null {
 
   description = description.replace(/\s+/g, ' ').trim() || 'รายการ';
 
-  let category = 'other';
-  if (/(ข้าว|กาแฟ|อาหาร|กิน|ชานม|ขนม)/i.test(lower)) {
-    category = 'food';
-  } else if (/(amazon|shop|shopping|ซื้อ|ร้าน)/i.test(lower)) {
-    category = 'shopping';
-  } else if (/(รถ|แท็กซี่|บัส|metro|train|น้ำมัน|fuel)/i.test(lower)) {
-    category = 'transport';
-  } else if (/(ค่าไฟ|ค่าน้ำ|internet|wifi|rent|ค่าเช่า|ค่าบริการ)/i.test(lower)) {
-    category = 'bill';
-  }
-
   return {
     type,
     amount,
     description,
-    category,
+    category: categorize(lower),
   };
+}
+
+export function categorize(text: string): string {
+  const lower = text.toLowerCase();
+  if (/(ข้าว|กาแฟ|อาหาร|กิน|ชานม|ขนม)/i.test(lower)) {
+    return 'food';
+  }
+  if (/(amazon|shop|shopping|ซื้อ|ร้าน)/i.test(lower)) {
+    return 'shopping';
+  }
+  if (/(รถ|แท็กซี่|บัส|metro|train|น้ำมัน|fuel)/i.test(lower)) {
+    return 'transport';
+  }
+  if (/(ค่าไฟ|ค่าน้ำ|internet|wifi|rent|ค่าเช่า|ค่าบริการ)/i.test(lower)) {
+    return 'bill';
+  }
+  return 'other';
 }
