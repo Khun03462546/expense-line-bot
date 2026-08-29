@@ -1,9 +1,14 @@
 import { NextRequest } from 'next/server';
 import { getSummaryForRange } from '@/lib/summary';
+import { isAuthorized, unauthorizedResponse } from '@/lib/auth';
 
 // API สำหรับสรุปข้อมูลตามช่วงเวลา
 // รองรับคำสั่งเช่น วันนี้ เมื่อวาน อาทิตย์นี้ เดือนนี้ ปีนี้
 export async function GET(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return unauthorizedResponse();
+  }
+
   const userId = req.nextUrl.searchParams.get('userId');
   const query = req.nextUrl.searchParams.get('q') || '';
 
