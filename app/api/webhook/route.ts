@@ -55,13 +55,13 @@ async function processEvent(event: webhook.Event) {
     user = await prisma.user.create({ data: { lineUserId, displayName } });
   }
 
-  const replyText = await handleUserMessage(user.id, event.message.text);
+  const reply = await handleUserMessage(user.id, event.message.text);
 
   if (event.replyToken) {
     try {
       await lineClient.replyMessage({
         replyToken: event.replyToken,
-        messages: [{ type: 'text', text: replyText }],
+        messages: [reply],
       });
     } catch (error) {
       console.error('Failed to reply via LINE', error);

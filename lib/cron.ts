@@ -2,6 +2,7 @@ import { prisma } from './prisma';
 import { lineClient } from './line';
 import { getSummaryForRange } from './summary';
 import { advanceRecurringDate } from './recurring';
+import { summaryReply } from './flex';
 
 // แอปนี้ตั้งเป้าผู้ใช้ในโซนเวลาเดียว (Asia/Bangkok, UTC+7 ไม่มี DST)
 // จึงคำนวณเวลาแบบ offset คงที่แทนการพึ่ง IANA timezone library
@@ -37,7 +38,7 @@ async function runDueReminders(now: Date, windowMinutes: number) {
     try {
       await lineClient.pushMessage({
         to: reminder.user.lineUserId,
-        messages: [{ type: 'text', text: `🔔 สรุปประจำวัน\n\n${summary.message}` }],
+        messages: [summaryReply('today', summary.income, summary.expense)],
       });
       sent += 1;
     } catch (error) {

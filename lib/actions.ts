@@ -2,14 +2,24 @@ import { prisma } from './prisma';
 import { parseExpenseText, categorize } from './parser';
 import { getSummaryForRange, type SummaryRange } from './summary';
 import { advanceRecurringDate, FREQUENCY_LABELS, type RecurringFrequency } from './recurring';
+import {
+  type BotReply,
+  textReply,
+  expenseReply,
+  summaryReply,
+  searchReply,
+  budgetReply,
+  reminderReply,
+  recurringCreatedReply,
+  recurringListReply,
+  formatBaht,
+} from './flex';
 
-const formatBaht = (value: number) => value.toLocaleString('th-TH', { maximumFractionDigits: 2 });
-
-async function handleSearch(userId: string, text: string): Promise<string> {
+async function handleSearch(userId: string, text: string): Promise<BotReply> {
   const keyword = text.replace(/^ค้นหา\s*/i, '').trim();
 
   if (!keyword) {
-    return 'กรุณาระบุคำค้นหา เช่น "ค้นหา ข้าว" หรือ "ค้นหา เดือนที่แล้ว"';
+    return textReply('กรุณาระบุคำค้นหา เช่น "ค้นหา ข้าว" หรือ "ค้นหา เดือนที่แล้ว"');
   }
 
   const isLastMonth = keyword.includes('เดือนที่แล้ว');
@@ -45,27 +55,31 @@ async function handleSearch(userId: string, text: string): Promise<string> {
       });
 
   if (transactions.length === 0) {
-    return isLastMonth ? 'ไม่พบรายการในเดือนที่แล้ว' : `ไม่พบรายการที่ตรงกับ "${keyword}"`;
+    return textReply(isLastMonth ? 'ไม่พบรายการในเดือนที่แล้ว' : `ไม่พบรายการที่ตรงกับ "${keyword}"`);
   }
-
-  const lines = transactions.map((tx) => {
-    const sign = tx.type === 'income' ? '+' : '-';
-    const date = tx.transactionDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
-    return `${sign}${formatBaht(Number(tx.amount))} • ${tx.description ?? tx.category ?? 'รายการ'} (${date})`;
-  });
 
   const total = transactions.reduce(
     (sum, tx) => sum + (tx.type === 'income' ? Number(tx.amount) : -Number(tx.amount)),
     0,
   );
 
-  return `🔍 พบ ${transactions.length} รายการ\n\n${lines.join('\n')}\n\nรวม: ${formatBaht(total)} บาท`;
+  return searchReply({
+    keyword: isLastMonth ? 'เดือนที่แล้ว' : keyword,
+    transactions: transactions.map((tx) => ({
+      type: tx.type,
+      amount: Number(tx.amount),
+      description: tx.description,
+      category: tx.category,
+      transactionDate: tx.transactionDate,
+    })),
+    total,
+  });
 }
 
-async function handleEditLast(userId: string, text: string): Promise<string> {
+async function handleEditLast(userId: string, text: string): Promise<BotReply> {
   const match = text.match(/^แก้ล่าสุด\s+(\d+(?:\.\d+)?)/i);
   if (!match) {
-    return 'ตัวอย่าง: แก้ล่าสุด 65';
+    return textReply('ตัวอย่าง: แก้ล่าสุด 65');
   }
 
   const latest = await prisma.transaction.findFirst({
@@ -74,7 +88,7 @@ async function handleEditLast(userId: string, text: string): Promise<string> {
   });
 
   if (!latest) {
-    return 'ยังไม่มีรายการให้แก้ไข';
+    return textReply('ยังไม่มีรายการให้แก้ไข');
   }
 
   const newAmount = Number(match[1]);
@@ -83,28 +97,28 @@ async function handleEditLast(userId: string, text: string): Promise<string> {
     data: { amount: newAmount },
   });
 
-  return `แก้รายการล่าสุด (${latest.description ?? 'รายการ'}) เป็น ${formatBaht(newAmount)} บาทแล้ว`;
+  return textReply(`แก้รายการล่าสุด (${latest.description ?? 'รายการ'}) เป็น ${formatBaht(newAmount)} บาทแล้ว`);
 }
 
-async function handleDeleteLast(userId: string): Promise<string> {
+async function handleDeleteLast(userId: string): Promise<BotReply> {
   const latest = await prisma.transaction.findFirst({
     where: { userId },
     orderBy: { transactionDate: 'desc' },
   });
 
   if (!latest) {
-    return 'ยังไม่มีรายการให้ลบ';
+    return textReply('ยังไม่มีรายการให้ลบ');
   }
 
   await prisma.transaction.delete({ where: { id: latest.id } });
 
-  return `ลบรายการล่าสุด (${latest.description ?? 'รายการ'} ${formatBaht(Number(latest.amount))} บาท) แล้ว`;
+  return textReply(`ลบรายการล่าสุด (${latest.description ?? 'รายการ'} ${formatBaht(Number(latest.amount))} บาท) แล้ว`);
 }
 
-async function handleBudget(userId: string, text: string): Promise<string> {
+async function handleBudget(userId: string, text: string): Promise<BotReply> {
   const match = text.match(/^ตั้งงบ\s*([ก-๙a-z\s]*?)\s*(\d+(?:\.\d+)?)\s*$/i);
   if (!match) {
-    return 'ตัวอย่าง: ตั้งงบอาหาร 5000';
+    return textReply('ตัวอย่าง: ตั้งงบอาหาร 5000');
   }
 
   const rawCategory = match[1].trim();
@@ -124,16 +138,16 @@ async function handleBudget(userId: string, text: string): Promise<string> {
     await prisma.budget.create({ data: { userId, category, amount, month, year } });
   }
 
-  return `ตั้งงบ ${rawCategory || category} เดือนนี้เป็น ${formatBaht(amount)} บาทแล้ว`;
+  return budgetReply(rawCategory || category, amount);
 }
 
-async function handleReminder(userId: string, text: string): Promise<string> {
+async function handleReminder(userId: string, text: string): Promise<BotReply> {
   const timeMatch = text.match(/^แจ้งเตือน\s+(\d{1,2}:\d{2})/i);
   const isEnable = /^เปิดแจ้งเตือน/i.test(text);
   const isDisable = /^ปิดแจ้งเตือน/i.test(text);
 
   if (!timeMatch && !isEnable && !isDisable) {
-    return 'ตัวอย่าง: แจ้งเตือน 20:00 / เปิดแจ้งเตือน / ปิดแจ้งเตือน';
+    return textReply('ตัวอย่าง: แจ้งเตือน 20:00 / เปิดแจ้งเตือน / ปิดแจ้งเตือน');
   }
 
   const existing = await prisma.reminder.findFirst({ where: { userId, type: 'daily-summary' } });
@@ -146,9 +160,9 @@ async function handleReminder(userId: string, text: string): Promise<string> {
     await prisma.reminder.create({ data: { userId, type: 'daily-summary', time, enabled } });
   }
 
-  if (isDisable) return 'ปิดแจ้งเตือนแล้ว';
-  if (timeMatch) return `ตั้งเวลาแจ้งเตือนเป็น ${time} แล้ว`;
-  return `เปิดแจ้งเตือนแล้ว (เวลา ${time})`;
+  if (isDisable) return reminderReply('ปิดแจ้งเตือนแล้ว', false);
+  if (timeMatch) return reminderReply(`ตั้งเวลาแจ้งเตือนเป็น ${time} แล้ว`, true);
+  return reminderReply(`เปิดแจ้งเตือนแล้ว (เวลา ${time})`, true);
 }
 
 function rangeFromText(text: string): SummaryRange {
@@ -182,15 +196,15 @@ async function getBudgetWarning(userId: string, category: string, now: Date): Pr
   const ratio = budgetAmount > 0 ? spent / budgetAmount : 0;
 
   if (ratio >= 1) {
-    return `⚠️ งบ ${category} เดือนนี้เกินแล้ว (${formatBaht(spent)}/${formatBaht(budgetAmount)} บาท)`;
+    return `งบ ${category} เดือนนี้เกินแล้ว (${formatBaht(spent)}/${formatBaht(budgetAmount)} บาท)`;
   }
   if (ratio >= 0.8) {
-    return `⚠️ งบ ${category} เดือนนี้ใกล้เต็มแล้ว (${formatBaht(spent)}/${formatBaht(budgetAmount)} บาท)`;
+    return `งบ ${category} เดือนนี้ใกล้เต็มแล้ว (${formatBaht(spent)}/${formatBaht(budgetAmount)} บาท)`;
   }
   return null;
 }
 
-async function handleExpense(userId: string, text: string): Promise<string | null> {
+async function handleExpense(userId: string, text: string): Promise<BotReply | null> {
   const parsed = parseExpenseText(text);
   if (!parsed) return null;
 
@@ -206,21 +220,21 @@ async function handleExpense(userId: string, text: string): Promise<string | nul
     },
   });
 
-  const label = parsed.type === 'income' ? 'รายรับ' : 'รายจ่าย';
-  let reply = `✅ บันทึก${label} ${formatBaht(parsed.amount)} บาท\n${parsed.description} • ${parsed.category}`;
+  const warning = parsed.type === 'expense' ? await getBudgetWarning(userId, parsed.category, now) : null;
 
-  if (parsed.type === 'expense') {
-    const warning = await getBudgetWarning(userId, parsed.category, now);
-    if (warning) reply += `\n\n${warning}`;
-  }
-
-  return reply;
+  return expenseReply({
+    isIncome: parsed.type === 'income',
+    amount: parsed.amount,
+    description: parsed.description,
+    category: parsed.category,
+    warning,
+  });
 }
 
-async function handleRecurringCreate(userId: string, text: string): Promise<string> {
+async function handleRecurringCreate(userId: string, text: string): Promise<BotReply> {
   const match = text.match(/^ตั้งรายการซ้ำ\s+([ก-๙a-z0-9\s]+?)\s+(\d+(?:\.\d+)?)\s+ทุก(วัน|สัปดาห์|เดือน)\s*$/i);
   if (!match) {
-    return 'ตัวอย่าง: ตั้งรายการซ้ำ ค่าเช่า 5000 ทุกเดือน (รองรับ ทุกวัน / ทุกสัปดาห์ / ทุกเดือน)';
+    return textReply('ตัวอย่าง: ตั้งรายการซ้ำ ค่าเช่า 5000 ทุกเดือน (รองรับ ทุกวัน / ทุกสัปดาห์ / ทุกเดือน)');
   }
 
   const description = match[1].trim();
@@ -243,33 +257,38 @@ async function handleRecurringCreate(userId: string, text: string): Promise<stri
     },
   });
 
-  const nextRunLabel = nextRun.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
-  return `🔁 ตั้งรายการซ้ำ "${description}" ${formatBaht(amount)} บาท ${FREQUENCY_LABELS[frequency]}แล้ว\nครั้งถัดไป: ${nextRunLabel}`;
+  return recurringCreatedReply({
+    description,
+    amount,
+    frequencyLabel: FREQUENCY_LABELS[frequency],
+    nextRunLabel: nextRun.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }),
+  });
 }
 
-async function handleRecurringList(userId: string): Promise<string> {
+async function handleRecurringList(userId: string): Promise<BotReply> {
   const items = await prisma.recurringTransaction.findMany({
     where: { userId, enabled: true },
     orderBy: { nextRun: 'asc' },
   });
 
   if (items.length === 0) {
-    return 'ยังไม่มีรายการซ้ำที่ตั้งไว้ ตัวอย่าง: ตั้งรายการซ้ำ ค่าเช่า 5000 ทุกเดือน';
+    return textReply('ยังไม่มีรายการซ้ำที่ตั้งไว้ ตัวอย่าง: ตั้งรายการซ้ำ ค่าเช่า 5000 ทุกเดือน');
   }
 
-  const lines = items.map((item) => {
-    const nextRunLabel = item.nextRun.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
-    const frequencyLabel = FREQUENCY_LABELS[item.frequency as RecurringFrequency] ?? item.frequency;
-    return `• ${item.description ?? 'รายการ'} ${formatBaht(Number(item.amount))} บาท ${frequencyLabel} (ถัดไป ${nextRunLabel})`;
-  });
-
-  return `🔁 รายการซ้ำที่ตั้งไว้\n\n${lines.join('\n')}`;
+  return recurringListReply(
+    items.map((item) => ({
+      description: item.description,
+      amount: Number(item.amount),
+      frequencyLabel: FREQUENCY_LABELS[item.frequency as RecurringFrequency] ?? item.frequency,
+      nextRunLabel: item.nextRun.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }),
+    })),
+  );
 }
 
-async function handleRecurringCancel(userId: string, text: string): Promise<string> {
+async function handleRecurringCancel(userId: string, text: string): Promise<BotReply> {
   const keyword = text.replace(/^ยกเลิกรายการซ้ำ\s*/i, '').trim();
   if (!keyword) {
-    return 'ตัวอย่าง: ยกเลิกรายการซ้ำ ค่าเช่า';
+    return textReply('ตัวอย่าง: ยกเลิกรายการซ้ำ ค่าเช่า');
   }
 
   const match = await prisma.recurringTransaction.findFirst({
@@ -277,21 +296,21 @@ async function handleRecurringCancel(userId: string, text: string): Promise<stri
   });
 
   if (!match) {
-    return `ไม่พบรายการซ้ำที่ตรงกับ "${keyword}"`;
+    return textReply(`ไม่พบรายการซ้ำที่ตรงกับ "${keyword}"`);
   }
 
   await prisma.recurringTransaction.update({ where: { id: match.id }, data: { enabled: false } });
 
-  return `ยกเลิกรายการซ้ำ "${match.description}" แล้ว`;
+  return textReply(`ยกเลิกรายการซ้ำ "${match.description}" แล้ว`);
 }
 
 const HELP_TEXT =
   'พิมพ์รายการ เช่น "จ่ายค่าข้าว 55 บาท" หรือดูสรุปด้วย "สรุปเดือนนี้"\nคำสั่งอื่น: ค้นหา / แก้ล่าสุด / ลบล่าสุด / ตั้งงบ / แจ้งเตือน / ตั้งรายการซ้ำ / รายการซ้ำ / ยกเลิกรายการซ้ำ';
 
 // รับข้อความจากผู้ใช้ 1 ข้อความ แล้ว route ไปยัง action ที่เกี่ยวข้อง คืนค่าเป็นข้อความสำหรับตอบกลับ LINE
-export async function handleUserMessage(userId: string, rawText: string): Promise<string> {
+export async function handleUserMessage(userId: string, rawText: string): Promise<BotReply> {
   const text = rawText.trim();
-  if (!text) return HELP_TEXT;
+  if (!text) return textReply(HELP_TEXT);
 
   if (/^ค้นหา/i.test(text)) return handleSearch(userId, text);
   if (/^แก้ล่าสุด/i.test(text)) return handleEditLast(userId, text);
@@ -303,12 +322,13 @@ export async function handleUserMessage(userId: string, rawText: string): Promis
   if (/^รายการซ้ำ/i.test(text)) return handleRecurringList(userId);
 
   if (/^(สรุป|วันนี้|เมื่อวาน|อาทิตย์นี้|เดือนนี้|ปีนี้)/i.test(text)) {
-    const summary = await getSummaryForRange(userId, rangeFromText(text));
-    return summary.message;
+    const range = rangeFromText(text);
+    const summary = await getSummaryForRange(userId, range);
+    return summaryReply(range, summary.income, summary.expense);
   }
 
-  const expenseReply = await handleExpense(userId, text);
-  if (expenseReply) return expenseReply;
+  const expenseReplyResult = await handleExpense(userId, text);
+  if (expenseReplyResult) return expenseReplyResult;
 
-  return HELP_TEXT;
+  return textReply(HELP_TEXT);
 }
