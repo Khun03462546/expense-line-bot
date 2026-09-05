@@ -360,6 +360,11 @@ const HELP_TEXT =
   'พิมพ์รายการ เช่น "จ่ายค่าข้าว 55 บาท" หรือดูสรุปด้วย "สรุปเดือนนี้"\n' +
   'คำสั่งอื่น: ค้นหา / แก้ล่าสุด / ลบล่าสุด / ตั้งงบ / ดูงบ / ลบงบ / แจ้งเตือน / ตั้งรายการซ้ำ / รายการซ้ำ / ยกเลิกรายการซ้ำ';
 
+// ข้อความต้อนรับพร้อมสรุปคำสั่งทั้งหมด ส่งให้ทันทีตอนผู้ใช้เพิ่มเพื่อน (follow event)
+export function getWelcomeReply(): BotReply {
+  return textReply('👋 ยินดีต้อนรับสู่บอทบันทึกรายรับ-รายจ่าย!\n\n' + HELP_TEXT);
+}
+
 // รับข้อความจากผู้ใช้ 1 ข้อความ แล้ว route ไปยัง action ที่เกี่ยวข้อง คืนค่าเป็นข้อความสำหรับตอบกลับ LINE
 export async function handleUserMessage(userId: string, rawText: string): Promise<BotReply> {
   const text = rawText.trim();
