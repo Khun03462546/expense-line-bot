@@ -211,6 +211,28 @@ async function getBudgetWarning(userId: string, category: string, now: Date): Pr
   return null;
 }
 
+async function handleBudgetDelete(userId: string, text: string): Promise<BotReply> {
+  const match = text.match(/^ลบงบ\s*([ก-๙a-z\s]*?)\s*$/i);
+  const rawCategory = match?.[1]?.trim();
+  if (!rawCategory) {
+    return textReply('ตัวอย่าง: ลบงบอาหาร');
+  }
+
+  const category = categorize(rawCategory);
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  const existing = await prisma.budget.findFirst({ where: { userId, category, month, year } });
+  if (!existing) {
+    return textReply(`ไม่พบงบ "${rawCategory}" ในเดือนนี้`);
+  }
+
+  await prisma.budget.delete({ where: { id: existing.id } });
+
+  return textReply(`ลบงบ ${rawCategory} เดือนนี้แล้ว`);
+}
+
 async function handleBudgetList(userId: string): Promise<BotReply> {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -393,7 +415,7 @@ async function handleTaxCalculate(userId: string): Promise<BotReply> {
 
 const HELP_TEXT =
   'พิมพ์รายการ เช่น "จ่ายค่าข้าว 55 บาท" หรือดูสรุปด้วย "สรุปเดือนนี้"\n' +
-  'คำสั่งอื่น: ค้นหา / แก้ล่าสุด / ลบล่าสุด / ตั้งงบ / ดูงบ / แจ้งเตือน / ตั้งรายการซ้ำ / รายการซ้ำ / ยกเลิกรายการซ้ำ\n' +
+  'คำสั่งอื่น: ค้นหา / แก้ล่าสุด / ลบล่าสุด / ตั้งงบ / ดูงบ / ลบงบ / แจ้งเตือน / ตั้งรายการซ้ำ / รายการซ้ำ / ยกเลิกรายการซ้ำ\n' +
   'ภาษี: ตั้งสถานะภาษี / ตั้งบุตร / ตั้งลดหย่อน / ภาษี (คำนวณ)';
 
 // รับข้อความจากผู้ใช้ 1 ข้อความ แล้ว route ไปยัง action ที่เกี่ยวข้อง คืนค่าเป็นข้อความสำหรับตอบกลับ LINE
@@ -405,6 +427,7 @@ export async function handleUserMessage(userId: string, rawText: string): Promis
   if (/^แก้ล่าสุด/i.test(text)) return handleEditLast(userId, text);
   if (/^ลบล่าสุด/i.test(text)) return handleDeleteLast(userId);
   if (/^ดูงบ/i.test(text)) return handleBudgetList(userId);
+  if (/^ลบงบ/i.test(text)) return handleBudgetDelete(userId, text);
   if (/^ตั้งงบ/i.test(text)) return handleBudget(userId, text);
   if (/^(แจ้งเตือน|เปิดแจ้งเตือน|ปิดแจ้งเตือน)/i.test(text)) return handleReminder(userId, text);
   if (/^ตั้งรายการซ้ำ/i.test(text)) return handleRecurringCreate(userId, text);
