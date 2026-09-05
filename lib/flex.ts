@@ -6,6 +6,7 @@ export type BotReply = messagingApi.Message;
 type FlexBox = messagingApi.FlexBox;
 type FlexComponent = messagingApi.FlexComponent;
 type FlexBubble = messagingApi.FlexBubble;
+type FlexCarousel = messagingApi.FlexCarousel;
 
 const COLOR = {
   income: '#06C755',
@@ -15,6 +16,12 @@ const COLOR = {
   heading: '#1A1A1A',
   subtext: '#8C8C8C',
   border: '#EEEEEE',
+  primary: '#3B82F6',
+  purple: '#8B5CF6',
+  gold: '#D97706',
+  teal: '#0D9488',
+  pink: '#DB2777',
+  chipBg: '#F5F6F8',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -64,7 +71,7 @@ function bubble(headerBox: FlexBox, bodyBox: FlexBox, footerBox?: FlexBox, size:
   };
 }
 
-function flexReply(altText: string, contents: FlexBubble): BotReply {
+function flexReply(altText: string, contents: FlexBubble | FlexCarousel): BotReply {
   return { type: 'flex', altText, contents };
 }
 
@@ -231,42 +238,119 @@ export function recurringCreatedReply(params: {
   );
 }
 
-type HelpSection = { icon: string; title: string; items: string[] };
+type HelpSection = { icon: string; title: string; accent: string; example: string; items: string[] };
 
 const HELP_SECTIONS: HelpSection[] = [
-  { icon: '📝', title: 'บันทึกรายการ', items: ['จ่ายค่าข้าว 55 บาท', 'ได้เงินเดือน 20000 บาท'] },
-  { icon: '📊', title: 'ดูสรุป', items: ['วันนี้ / เมื่อวาน / อาทิตย์นี้ / เดือนนี้ / ปีนี้'] },
-  { icon: '🔍', title: 'ค้นหา & แก้ไข', items: ['ค้นหา [คำ]', 'แก้ล่าสุด [จำนวน]', 'ลบล่าสุด'] },
-  { icon: '🎯', title: 'งบประมาณ', items: ['ตั้งงบ[หมวด] [จำนวน]', 'ดูงบ', 'ลบงบ[หมวด]'] },
-  { icon: '🔔', title: 'แจ้งเตือน', items: ['แจ้งเตือน HH:MM', 'เปิดแจ้งเตือน / ปิดแจ้งเตือน'] },
-  { icon: '🔁', title: 'รายการซ้ำ', items: ['ตั้งรายการซ้ำ [ชื่อ] [จำนวน] ทุกวัน/สัปดาห์/เดือน', 'รายการซ้ำ', 'ยกเลิกรายการซ้ำ [ชื่อ]'] },
+  {
+    icon: '📝',
+    title: 'บันทึกรายการ',
+    accent: COLOR.income,
+    example: 'จ่ายค่าข้าว 55 บาท',
+    items: ['จ่ายค่าข้าว 55 บาท', 'ได้เงินเดือน 20000 บาท'],
+  },
+  {
+    icon: '📊',
+    title: 'ดูสรุป',
+    accent: COLOR.primary,
+    example: 'สรุปเดือนนี้',
+    items: ['วันนี้', 'เมื่อวาน', 'อาทิตย์นี้', 'เดือนนี้', 'ปีนี้'],
+  },
+  {
+    icon: '🔍',
+    title: 'ค้นหา & แก้ไข',
+    accent: COLOR.purple,
+    example: 'ค้นหา ข้าว',
+    items: ['ค้นหา [คำ]', 'แก้ล่าสุด [จำนวน]', 'ลบล่าสุด'],
+  },
+  {
+    icon: '🎯',
+    title: 'งบประมาณ',
+    accent: COLOR.gold,
+    example: 'ตั้งงบอาหาร 5000',
+    items: ['ตั้งงบ[หมวด] [จำนวน]', 'ดูงบ', 'ลบงบ[หมวด]'],
+  },
+  {
+    icon: '🔔',
+    title: 'แจ้งเตือน',
+    accent: COLOR.teal,
+    example: 'แจ้งเตือน 20:00',
+    items: ['แจ้งเตือน HH:MM', 'เปิดแจ้งเตือน', 'ปิดแจ้งเตือน'],
+  },
+  {
+    icon: '🔁',
+    title: 'รายการซ้ำ',
+    accent: COLOR.pink,
+    example: 'ตั้งรายการซ้ำ ค่าเช่า 5000 ทุกเดือน',
+    items: ['ตั้งรายการซ้ำ [ชื่อ] [จำนวน] ทุกวัน/สัปดาห์/เดือน', 'รายการซ้ำ', 'ยกเลิกรายการซ้ำ [ชื่อ]'],
+  },
 ];
 
-export function helpReply(greeting?: string): BotReply {
-  const label = greeting ? '👋 ยินดีต้อนรับ' : '📋 คำสั่งทั้งหมด';
-
-  const bodyContents: FlexComponent[] = [];
-  if (greeting) {
-    bodyContents.push(text(greeting, { size: 'sm', color: COLOR.subtext }));
-  }
-
-  HELP_SECTIONS.forEach((section, index) => {
-    if (index > 0 || greeting) bodyContents.push(separator());
-    bodyContents.push(
-      box(
-        'vertical',
-        [
-          text(`${section.icon} ${section.title}`, { size: 'sm', weight: 'bold', color: COLOR.heading }),
-          ...section.items.map((item) => text(item, { size: 'xs', color: COLOR.subtext, margin: 'xs' })),
-        ],
-        { margin: index > 0 || greeting ? 'md' : undefined },
-      ),
-    );
+function chip(content: string, accent: string): FlexBox {
+  return box('vertical', [text(content, { size: 'xs', color: COLOR.heading, wrap: true })], {
+    backgroundColor: COLOR.chipBg,
+    borderColor: accent,
+    borderWidth: 'light',
+    cornerRadius: 'md',
+    paddingAll: 'sm',
   });
+}
+
+function welcomeCoverBubble(greeting: string): FlexBubble {
+  const headerBox = box(
+    'vertical',
+    [
+      text('👋', { size: '3xl' }),
+      text(greeting, { color: '#FFFFFF', weight: 'bold', size: 'lg', margin: 'md' }),
+    ],
+    { backgroundColor: COLOR.income, paddingAll: 'xl' },
+  );
+
+  const bodyBox = box(
+    'vertical',
+    [
+      text('เริ่มบันทึกได้เลยด้วยข้อความง่าย ๆ เช่น', { size: 'sm', color: COLOR.subtext }),
+      chip(`💬 ${HELP_SECTIONS[0].example}`, COLOR.income),
+      text('เลื่อนดูคำสั่งทั้งหมดทางขวา ➡️', { size: 'xs', color: COLOR.subtext, margin: 'lg', align: 'center' }),
+    ],
+    { paddingAll: 'lg', spacing: 'md' },
+  );
+
+  return bubble(headerBox, bodyBox);
+}
+
+function helpSectionBubble(section: HelpSection): FlexBubble {
+  const headerBox = box(
+    'vertical',
+    [
+      text(section.icon, { size: 'xxl' }),
+      text(section.title, { color: '#FFFFFF', weight: 'bold', size: 'md', margin: 'sm' }),
+    ],
+    { backgroundColor: section.accent, paddingAll: 'lg' },
+  );
+
+  const bodyBox = box(
+    'vertical',
+    [
+      ...section.items.map((item) =>
+        box('horizontal', [
+          text('•', { size: 'sm', color: section.accent, weight: 'bold', flex: 0 }),
+          text(item, { size: 'xs', color: COLOR.heading, wrap: true, margin: 'sm', flex: 1 }),
+        ]),
+      ),
+      chip(`💬 ${section.example}`, section.accent),
+    ],
+    { paddingAll: 'lg', spacing: 'sm' },
+  );
+
+  return bubble(headerBox, bodyBox);
+}
+
+export function helpReply(greeting?: string): BotReply {
+  const bubbles = [...(greeting ? [welcomeCoverBubble(greeting)] : []), ...HELP_SECTIONS.map(helpSectionBubble)];
 
   return flexReply(
     greeting ? `${greeting} พิมพ์ "จ่ายค่าข้าว 55 บาท" เพื่อเริ่มบันทึกได้เลย` : 'คำสั่งทั้งหมดของบอท',
-    bubble(header(label, COLOR.heading), box('vertical', bodyContents, { paddingAll: 'lg', spacing: 'sm' }), undefined, 'mega'),
+    { type: 'carousel', contents: bubbles },
   );
 }
 
