@@ -54,10 +54,10 @@ function header(label: string, accentColor: string): FlexBox {
   });
 }
 
-function bubble(headerBox: FlexBox, bodyBox: FlexBox, footerBox?: FlexBox): FlexBubble {
+function bubble(headerBox: FlexBox, bodyBox: FlexBox, footerBox?: FlexBox, size: FlexBubble['size'] = 'kilo'): FlexBubble {
   return {
     type: 'bubble',
-    size: 'kilo',
+    size,
     header: headerBox,
     body: bodyBox,
     ...(footerBox ? { footer: footerBox } : {}),
@@ -228,6 +228,45 @@ export function recurringCreatedReply(params: {
   return flexReply(
     `${label}: ${params.description} ${formatBaht(params.amount)} บาท`,
     bubble(header(label, COLOR.heading), bodyBox),
+  );
+}
+
+type HelpSection = { icon: string; title: string; items: string[] };
+
+const HELP_SECTIONS: HelpSection[] = [
+  { icon: '📝', title: 'บันทึกรายการ', items: ['จ่ายค่าข้าว 55 บาท', 'ได้เงินเดือน 20000 บาท'] },
+  { icon: '📊', title: 'ดูสรุป', items: ['วันนี้ / เมื่อวาน / อาทิตย์นี้ / เดือนนี้ / ปีนี้'] },
+  { icon: '🔍', title: 'ค้นหา & แก้ไข', items: ['ค้นหา [คำ]', 'แก้ล่าสุด [จำนวน]', 'ลบล่าสุด'] },
+  { icon: '🎯', title: 'งบประมาณ', items: ['ตั้งงบ[หมวด] [จำนวน]', 'ดูงบ', 'ลบงบ[หมวด]'] },
+  { icon: '🔔', title: 'แจ้งเตือน', items: ['แจ้งเตือน HH:MM', 'เปิดแจ้งเตือน / ปิดแจ้งเตือน'] },
+  { icon: '🔁', title: 'รายการซ้ำ', items: ['ตั้งรายการซ้ำ [ชื่อ] [จำนวน] ทุกวัน/สัปดาห์/เดือน', 'รายการซ้ำ', 'ยกเลิกรายการซ้ำ [ชื่อ]'] },
+];
+
+export function helpReply(greeting?: string): BotReply {
+  const label = greeting ? '👋 ยินดีต้อนรับ' : '📋 คำสั่งทั้งหมด';
+
+  const bodyContents: FlexComponent[] = [];
+  if (greeting) {
+    bodyContents.push(text(greeting, { size: 'sm', color: COLOR.subtext }));
+  }
+
+  HELP_SECTIONS.forEach((section, index) => {
+    if (index > 0 || greeting) bodyContents.push(separator());
+    bodyContents.push(
+      box(
+        'vertical',
+        [
+          text(`${section.icon} ${section.title}`, { size: 'sm', weight: 'bold', color: COLOR.heading }),
+          ...section.items.map((item) => text(item, { size: 'xs', color: COLOR.subtext, margin: 'xs' })),
+        ],
+        { margin: index > 0 || greeting ? 'md' : undefined },
+      ),
+    );
+  });
+
+  return flexReply(
+    greeting ? `${greeting} พิมพ์ "จ่ายค่าข้าว 55 บาท" เพื่อเริ่มบันทึกได้เลย` : 'คำสั่งทั้งหมดของบอท',
+    bubble(header(label, COLOR.heading), box('vertical', bodyContents, { paddingAll: 'lg', spacing: 'sm' }), undefined, 'mega'),
   );
 }
 

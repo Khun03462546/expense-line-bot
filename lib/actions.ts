@@ -13,6 +13,7 @@ import {
   reminderReply,
   recurringCreatedReply,
   recurringListReply,
+  helpReply,
   formatBaht,
 } from './flex';
 
@@ -356,19 +357,15 @@ async function handleRecurringCancel(userId: string, text: string): Promise<BotR
   return textReply(`ยกเลิกรายการซ้ำ "${match.description}" แล้ว`);
 }
 
-const HELP_TEXT =
-  'พิมพ์รายการ เช่น "จ่ายค่าข้าว 55 บาท" หรือดูสรุปด้วย "สรุปเดือนนี้"\n' +
-  'คำสั่งอื่น: ค้นหา / แก้ล่าสุด / ลบล่าสุด / ตั้งงบ / ดูงบ / ลบงบ / แจ้งเตือน / ตั้งรายการซ้ำ / รายการซ้ำ / ยกเลิกรายการซ้ำ';
-
 // ข้อความต้อนรับพร้อมสรุปคำสั่งทั้งหมด ส่งให้ทันทีตอนผู้ใช้เพิ่มเพื่อน (follow event)
 export function getWelcomeReply(): BotReply {
-  return textReply('👋 ยินดีต้อนรับสู่บอทบันทึกรายรับ-รายจ่าย!\n\n' + HELP_TEXT);
+  return helpReply('ยินดีต้อนรับสู่บอทบันทึกรายรับ-รายจ่าย!');
 }
 
 // รับข้อความจากผู้ใช้ 1 ข้อความ แล้ว route ไปยัง action ที่เกี่ยวข้อง คืนค่าเป็นข้อความสำหรับตอบกลับ LINE
 export async function handleUserMessage(userId: string, rawText: string): Promise<BotReply> {
   const text = rawText.trim();
-  if (!text) return textReply(HELP_TEXT);
+  if (!text) return helpReply();
 
   if (/^ค้นหา/i.test(text)) return handleSearch(userId, text);
   if (/^แก้ล่าสุด/i.test(text)) return handleEditLast(userId, text);
@@ -390,5 +387,5 @@ export async function handleUserMessage(userId: string, rawText: string): Promis
   const expenseReplyResult = await handleExpense(userId, text);
   if (expenseReplyResult) return expenseReplyResult;
 
-  return textReply(HELP_TEXT);
+  return helpReply();
 }
