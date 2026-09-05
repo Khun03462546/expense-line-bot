@@ -2,7 +2,6 @@ import { prisma } from './prisma';
 import { parseExpenseText, categorize } from './parser';
 import { getSummaryForRange, type SummaryRange } from './summary';
 import { advanceRecurringDate, FREQUENCY_LABELS, type RecurringFrequency } from './recurring';
-import { getTaxSummary } from './tax';
 import {
   type BotReply,
   textReply,
@@ -14,7 +13,6 @@ import {
   reminderReply,
   recurringCreatedReply,
   recurringListReply,
-  taxSummaryReply,
   formatBaht,
 } from './flex';
 
@@ -358,65 +356,9 @@ async function handleRecurringCancel(userId: string, text: string): Promise<BotR
   return textReply(`ยกเลิกรายการซ้ำ "${match.description}" แล้ว`);
 }
 
-async function handleTaxStatus(userId: string, text: string): Promise<BotReply> {
-  const match = text.match(/^ตั้งสถานะภาษี\s*(โสด|สมรส)/i);
-  if (!match) {
-    return textReply('ตัวอย่าง: ตั้งสถานะภาษี โสด หรือ ตั้งสถานะภาษี สมรส');
-  }
-
-  const maritalStatus = match[1] === 'สมรส' ? 'married' : 'single';
-
-  await prisma.taxProfile.upsert({
-    where: { userId },
-    update: { maritalStatus },
-    create: { userId, maritalStatus },
-  });
-
-  return textReply(`ตั้งสถานะภาษีเป็น "${match[1]}" แล้ว`);
-}
-
-async function handleTaxChildren(userId: string, text: string): Promise<BotReply> {
-  const match = text.match(/^ตั้งบุตร\s+(\d+)/i);
-  if (!match) {
-    return textReply('ตัวอย่าง: ตั้งบุตร 2');
-  }
-
-  const children = Number(match[1]);
-
-  await prisma.taxProfile.upsert({
-    where: { userId },
-    update: { children },
-    create: { userId, children },
-  });
-
-  return textReply(`ตั้งจำนวนบุตร (สำหรับลดหย่อนภาษี) เป็น ${children} คนแล้ว`);
-}
-
-async function handleTaxDeduction(userId: string, text: string): Promise<BotReply> {
-  const match = text.match(/^ตั้งลดหย่อน\s+([ก-๙a-z\s]+?)\s+(\d+(?:\.\d+)?)\s*$/i);
-  if (!match) {
-    return textReply('ตัวอย่าง: ตั้งลดหย่อน ประกันชีวิต 20000');
-  }
-
-  const label = match[1].trim();
-  const amount = Number(match[2]);
-  const year = new Date().getFullYear();
-
-  await prisma.taxDeduction.create({ data: { userId, label, amount, year } });
-
-  return textReply(`บันทึกค่าลดหย่อน "${label}" ${formatBaht(amount)} บาท (ปี ${year}) แล้ว`);
-}
-
-async function handleTaxCalculate(userId: string): Promise<BotReply> {
-  const year = new Date().getFullYear();
-  const summary = await getTaxSummary(userId, year);
-  return taxSummaryReply(summary);
-}
-
 const HELP_TEXT =
   'พิมพ์รายการ เช่น "จ่ายค่าข้าว 55 บาท" หรือดูสรุปด้วย "สรุปเดือนนี้"\n' +
-  'คำสั่งอื่น: ค้นหา / แก้ล่าสุด / ลบล่าสุด / ตั้งงบ / ดูงบ / ลบงบ / แจ้งเตือน / ตั้งรายการซ้ำ / รายการซ้ำ / ยกเลิกรายการซ้ำ\n' +
-  'ภาษี: ตั้งสถานะภาษี / ตั้งบุตร / ตั้งลดหย่อน / ภาษี (คำนวณ)';
+  'คำสั่งอื่น: ค้นหา / แก้ล่าสุด / ลบล่าสุด / ตั้งงบ / ดูงบ / ลบงบ / แจ้งเตือน / ตั้งรายการซ้ำ / รายการซ้ำ / ยกเลิกรายการซ้ำ';
 
 // รับข้อความจากผู้ใช้ 1 ข้อความ แล้ว route ไปยัง action ที่เกี่ยวข้อง คืนค่าเป็นข้อความสำหรับตอบกลับ LINE
 export async function handleUserMessage(userId: string, rawText: string): Promise<BotReply> {
@@ -433,10 +375,6 @@ export async function handleUserMessage(userId: string, rawText: string): Promis
   if (/^ตั้งรายการซ้ำ/i.test(text)) return handleRecurringCreate(userId, text);
   if (/^ยกเลิกรายการซ้ำ/i.test(text)) return handleRecurringCancel(userId, text);
   if (/^รายการซ้ำ/i.test(text)) return handleRecurringList(userId);
-  if (/^ตั้งสถานะภาษี/i.test(text)) return handleTaxStatus(userId, text);
-  if (/^ตั้งบุตร/i.test(text)) return handleTaxChildren(userId, text);
-  if (/^ตั้งลดหย่อน/i.test(text)) return handleTaxDeduction(userId, text);
-  if (/^(คำนวณภาษี|ภาษี)/i.test(text)) return handleTaxCalculate(userId);
 
   if (/^(สรุป|วันนี้|เมื่อวาน|อาทิตย์นี้|เดือนนี้|ปีนี้)/i.test(text)) {
     const range = rangeFromText(text);
