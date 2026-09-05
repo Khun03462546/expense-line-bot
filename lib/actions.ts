@@ -10,6 +10,7 @@ import {
   summaryReply,
   searchReply,
   budgetReply,
+  budgetListReply,
   reminderReply,
   recurringCreatedReply,
   recurringListReply,
@@ -175,14 +176,7 @@ function rangeFromText(text: string): SummaryRange {
   return 'month';
 }
 
-// เตือนเมื่อยอดใช้จ่ายหมวดนี้ในเดือนนี้ใกล้/เกินงบที่ตั้งไว้ (>=80% เตือน, >=100% เกินงบ)
-async function getBudgetWarning(userId: string, category: string, now: Date): Promise<string | null> {
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-
-  const budget = await prisma.budget.findFirst({ where: { userId, category, month, year } });
-  if (!budget) return null;
-
+async function getSpentAmount(userId: string, category: string, month: number, year: number): Promise<number> {
   const { _sum } = await prisma.transaction.aggregate({
     where: {
       userId,
@@ -193,7 +187,18 @@ async function getBudgetWarning(userId: string, category: string, now: Date): Pr
     _sum: { amount: true },
   });
 
-  const spent = Number(_sum.amount ?? 0);
+  return Number(_sum.amount ?? 0);
+}
+
+// เตือนเมื่อยอดใช้จ่ายหมวดนี้ในเดือนนี้ใกล้/เกินงบที่ตั้งไว้ (>=80% เตือน, >=100% เกินงบ)
+async function getBudgetWarning(userId: string, category: string, now: Date): Promise<string | null> {
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  const budget = await prisma.budget.findFirst({ where: { userId, category, month, year } });
+  if (!budget) return null;
+
+  const spent = await getSpentAmount(userId, category, month, year);
   const budgetAmount = Number(budget.amount);
   const ratio = budgetAmount > 0 ? spent / budgetAmount : 0;
 
@@ -204,6 +209,31 @@ async function getBudgetWarning(userId: string, category: string, now: Date): Pr
     return `งบ ${category} เดือนนี้ใกล้เต็มแล้ว (${formatBaht(spent)}/${formatBaht(budgetAmount)} บาท)`;
   }
   return null;
+}
+
+async function handleBudgetList(userId: string): Promise<BotReply> {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  const budgets = await prisma.budget.findMany({
+    where: { userId, month, year },
+    orderBy: { category: 'asc' },
+  });
+
+  if (budgets.length === 0) {
+    return textReply('ยังไม่มีการตั้งงบในเดือนนี้ ตัวอย่าง: ตั้งงบอาหาร 5000');
+  }
+
+  const items = await Promise.all(
+    budgets.map(async (budget) => ({
+      category: budget.category,
+      amount: Number(budget.amount),
+      spent: await getSpentAmount(userId, budget.category, month, year),
+    })),
+  );
+
+  return budgetListReply(items);
 }
 
 async function handleExpense(userId: string, text: string): Promise<BotReply | null> {
@@ -363,7 +393,7 @@ async function handleTaxCalculate(userId: string): Promise<BotReply> {
 
 const HELP_TEXT =
   'พิมพ์รายการ เช่น "จ่ายค่าข้าว 55 บาท" หรือดูสรุปด้วย "สรุปเดือนนี้"\n' +
-  'คำสั่งอื่น: ค้นหา / แก้ล่าสุด / ลบล่าสุด / ตั้งงบ / แจ้งเตือน / ตั้งรายการซ้ำ / รายการซ้ำ / ยกเลิกรายการซ้ำ\n' +
+  'คำสั่งอื่น: ค้นหา / แก้ล่าสุด / ลบล่าสุด / ตั้งงบ / ดูงบ / แจ้งเตือน / ตั้งรายการซ้ำ / รายการซ้ำ / ยกเลิกรายการซ้ำ\n' +
   'ภาษี: ตั้งสถานะภาษี / ตั้งบุตร / ตั้งลดหย่อน / ภาษี (คำนวณ)';
 
 // รับข้อความจากผู้ใช้ 1 ข้อความ แล้ว route ไปยัง action ที่เกี่ยวข้อง คืนค่าเป็นข้อความสำหรับตอบกลับ LINE
@@ -374,6 +404,7 @@ export async function handleUserMessage(userId: string, rawText: string): Promis
   if (/^ค้นหา/i.test(text)) return handleSearch(userId, text);
   if (/^แก้ล่าสุด/i.test(text)) return handleEditLast(userId, text);
   if (/^ลบล่าสุด/i.test(text)) return handleDeleteLast(userId);
+  if (/^ดูงบ/i.test(text)) return handleBudgetList(userId);
   if (/^ตั้งงบ/i.test(text)) return handleBudget(userId, text);
   if (/^(แจ้งเตือน|เปิดแจ้งเตือน|ปิดแจ้งเตือน)/i.test(text)) return handleReminder(userId, text);
   if (/^ตั้งรายการซ้ำ/i.test(text)) return handleRecurringCreate(userId, text);

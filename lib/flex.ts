@@ -181,6 +181,25 @@ export function budgetReply(category: string, amount: number): BotReply {
   return flexReply(`${label} เป็น ${formatBaht(amount)} บาทแล้ว`, bubble(header(label, COLOR.heading), bodyBox));
 }
 
+export function budgetListReply(items: Array<{ category: string; amount: number; spent: number }>): BotReply {
+  const label = '🎯 งบเดือนนี้';
+  const rows = items.map((item) => {
+    const ratio = item.amount > 0 ? item.spent / item.amount : 0;
+    const valueColor = ratio >= 1 ? COLOR.expense : ratio >= 0.8 ? COLOR.warning : COLOR.heading;
+    return box('horizontal', [
+      text(categoryLabel(item.category), { flex: 1, size: 'xs', color: COLOR.subtext }),
+      text(`${formatBaht(item.spent)} / ${formatBaht(item.amount)}`, {
+        size: 'xs',
+        weight: 'bold',
+        align: 'end',
+        color: valueColor,
+      }),
+    ]);
+  });
+
+  return flexReply(label, bubble(header(label, COLOR.heading), box('vertical', rows, { paddingAll: 'lg', spacing: 'sm' })));
+}
+
 export function reminderReply(message: string, enabled: boolean): BotReply {
   const label = '🔔 แจ้งเตือน';
   const bodyBox = box('vertical', [text(message, { size: 'md', color: COLOR.heading })], { paddingAll: 'lg' });
